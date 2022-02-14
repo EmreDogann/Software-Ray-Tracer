@@ -1,0 +1,17 @@
+BasedOnStyle: LLVM
+UseTab: ForIndentation
+IndentWidth: 4
+TabWidth: 4
+BreakBeforeBraces: Attach
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortBlocksOnASingleLine: Empty
+AllowShortFunctionsOnASingleLine: Inline
+IndentCaseLabels: true
+ColumnLimit: 150
+AccessModifierOffset: -4
+NamespaceIndentation: All
+FixNamespaceComments: true
+BinPackArguments: false
+BinPackParameters: false
+AllowAllParametersOfDeclarationOnNextLine: false
+PenaltyBreakComment: 1000000000
