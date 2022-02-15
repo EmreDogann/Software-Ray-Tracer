@@ -2,7 +2,6 @@
 
 #include "hittable.hpp"
 
-#include <memory>
 #include <vector>
 
 class HittableList : public Hittable {

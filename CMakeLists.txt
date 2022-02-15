@@ -1,6 +1,7 @@
 cmake_minimum_required(VERSION 3.7)
 
 set(NAME Software-Ray-Tracer)
+set(DCMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 project(${NAME} VERSION 0.10.0)
 

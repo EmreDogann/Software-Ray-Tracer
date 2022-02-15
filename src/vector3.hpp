@@ -1,10 +1,7 @@
 #pragma once
 
-#include <cmath>
+#include "math_utils.hpp"
 #include <iostream>
-
-inline double random_double();
-inline double random_double(double min, double max);
 
 class Vec3 {
 public:
@@ -38,6 +35,12 @@ public:
 	double length() const { return sqrt(length_squared()); }
 
 	double length_squared() const { return e[0] * e[0] + e[1] * e[1] + e[2] * e[2]; }
+
+	// Return true if the vector is close to zero in all dimensions.
+	bool near_zero() const {
+		const double s = 1e-8;
+		return (fabs(e[0]) < s) && (fabs(e[1]) < s) && (fabs(e[2]) < s);
+	}
 
 	inline static Vec3 random() { return Vec3(random_double(), random_double(), random_double()); }
 
@@ -91,20 +94,42 @@ inline Vec3 unit_vector(Vec3 v) {
 inline Vec3 random_in_unit_sphere() {
 	while (true) {
 		Vec3 p = Vec3::random(-1, 1);
-		if (p.length_squared() >= 1)
+		if (p.length_squared() >= 1) {
 			continue;
+		}
 		return p;
 	}
 }
 
 inline Vec3 random_in_hemisphere(const Vec3 &normal) {
 	Vec3 in_unit_sphere = random_in_unit_sphere();
-	if (dot(in_unit_sphere, normal) > 0.0) // In the same hemisphere as the normal
+	if (dot(in_unit_sphere, normal) > 0.0) { // In the same hemisphere as the normal
 		return in_unit_sphere;
-	else
+	} else {
 		return -in_unit_sphere;
+	}
 }
 
 inline Vec3 random_unit_vector() {
 	return unit_vector(random_in_unit_sphere());
+}
+
+inline Vec3 reflect(const Vec3 &v, const Vec3 &n) {
+	return v - 2 * dot(v, n) * n;
+}
+
+inline Vec3 refract(const Vec3 &incomingRay, const Vec3 &normal, double etai_over_etat) {
+	double cos_theta = fmin(dot(-incomingRay, normal), 1.0);
+	Vec3 rayOutPerpendicular = etai_over_etat * (incomingRay + cos_theta * normal);
+	Vec3 rayOutParallel = -sqrt(fabs(1.0 - rayOutPerpendicular.length_squared())) * normal;
+	return rayOutPerpendicular + rayOutParallel;
+}
+
+inline Vec3 random_in_unit_disk() {
+	while (true) {
+		auto p = Vec3(random_double(-1, 1), random_double(-1, 1), 0);
+		if (p.length_squared() >= 1)
+			continue;
+		return p;
+	}
 }

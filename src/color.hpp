@@ -1,6 +1,5 @@
 #include <fstream>
 
-#include "math_utils.hpp"
 #include "vector3.hpp"
 
 inline void writeColor(std::ofstream &out, Vec3 pixelColor, int samplesPerPixel) {

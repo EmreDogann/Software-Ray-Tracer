@@ -6,7 +6,7 @@
     NOTE: If the ray's direction vector is normalized, then a = 1.
     This is because a normalized vector doted with itself is length^2, so no need to perform an unnecessary calculation.
 
-    b = 2D(O - C)
+    b = D(O - C)
     c = |O - C|^2 - R^2
 
     O = Ray's origin
@@ -36,11 +36,15 @@ bool Sphere::hit(const Ray &ray, double t_min, double t_max, HitRecord &record) 
 
 	// Find the nearest root that lies in the acceptable range.
 	double root = (-halfB - discriminantSqrt) / a;
+	bool negative = true;
+
+	// Check if the ray hit an object along its ray direction that is closer than the previously found hit, if there is any.
 	if (root < t_min || root > t_max) {
 		root = (-halfB + discriminantSqrt) / a;
 		if (root < t_min || root > t_max) {
 			return false; // The ray may have intersected with the sphere, but it was not in our acceptable root range.
 		}
+		negative = false;
 	}
 
 	// Save the intersection information.
@@ -48,6 +52,7 @@ bool Sphere::hit(const Ray &ray, double t_min, double t_max, HitRecord &record) 
 	record.position = ray.at(record.t);
 	record.setFaceNormal(
 	    ray, (record.position - center) / radius); // Get Normal and normalize it. Use it to determine the surface face direction (outward or inward).
+	record.material = material;
 
 	return true;
 }
