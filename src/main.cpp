@@ -2,11 +2,17 @@
 #include "color.hpp"
 #include "hittable_list.hpp"
 #include "material.hpp"
+#include "math_utils.hpp"
 #include "ray.hpp"
 #include "sphere.hpp"
 
-#include "chrono"
-#include <memory>
+// std
+#include <atomic>
+#include <chrono>
+#include <cstddef>
+#include <future>
+#include <mutex>
+#include <thread>
 
 Vec3 rayColor(const Ray &ray, const Hittable &world, int depth) {
 	HitRecord record;
@@ -77,16 +83,20 @@ HittableList random_scene() {
 	return world;
 }
 
+struct RowResult {
+	unsigned int row;
+	std::vector<Vec3> rayColors;
+};
+
 int main() {
 	// Image
 	const double aspect_ratio = 16.0 / 9.0;
-	const int image_width = 1920;
+	const int image_width = 2560;
 	const int image_height = static_cast<int>(image_width / aspect_ratio);
-	const int samplesPerPixel = 10;
+	const int samplesPerPixel = 100;
 	const int maxDepth = 50;
 
 	// World
-
 	HittableList world = random_scene();
 
 	// Camera
@@ -94,51 +104,93 @@ int main() {
 	Vec3 lookAt(0.0f, 0.0f, 0.0f);
 	Camera camera(lookFrom, lookAt, Vec3(0, 1, 0), 30.0f, aspect_ratio, 0.1f, 10.0f);
 
+	// Setup multi-threading.
+	std::mutex mutex;
+	const unsigned int threads = std::thread::hardware_concurrency();
+	volatile std::atomic<std::size_t> rowCount(0);
+	std::vector<std::future<std::vector<RowResult>>> future_vec;
+
+	for (unsigned int thread = 0; thread < threads; thread++) {
+		future_vec.emplace_back(std::async(std::launch::async, [=, &mutex, &world, &rowCount]() {
+			auto begin = std::chrono::high_resolution_clock::now();
+
+			std::vector<RowResult> results_vec{};
+			// Traverse image from left to right, top to bottom.
+			while (rowCount < image_height) {
+				auto currentRow = rowCount++;
+				RowResult rowResult;
+				// std::cerr << "\rScanlines remaining: " << rowCount << ' ' << std::flush;
+				for (int col = 0; col < image_width; ++col) {
+					Vec3 pixelColor(0, 0, 0);
+					for (int s = 0; s < samplesPerPixel; ++s) {
+						// Map pixel coordinates from screen space to [0,1] range.
+						double u = (col + random_double()) / (image_width - 1);
+						double v = (currentRow + random_double()) / (image_height - 1);
+
+						/* Guide for how the ray origin and direction is determined:
+						 (-x,y)                   (x,y)
+						    1-----------------------2
+						    |                       |
+						    |                       |
+						    |           X           |
+						    |         (0,0)         |
+						    |                       |
+						    3-----------------------4
+						 (x,-y)                  (-x,-y)
+
+						    2x = horizontalSize
+						    2y = verticalSize
+						*/
+						Ray ray = camera.getRay(u, v);
+						pixelColor += rayColor(ray, world, maxDepth);
+					}
+
+					// Gamme Correction.
+					pixelColor[0] = sqrt(pixelColor[0] / samplesPerPixel);
+					pixelColor[1] = sqrt(pixelColor[1] / samplesPerPixel);
+					pixelColor[2] = sqrt(pixelColor[2] / samplesPerPixel);
+
+					rowResult.row = currentRow;
+					rowResult.rayColors.emplace_back(pixelColor);
+
+					// writeColor(imageFile, pixelColor, samplesPerPixel);
+				}
+				results_vec.emplace_back(rowResult);
+			}
+
+			auto end = std::chrono::high_resolution_clock::now();
+			auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - begin);
+
+			std::lock_guard<std::mutex> lock(mutex);
+			std::cout << "Done!. Time measured: " << duration.count() * 1e-9 << " seconds." << std::endl;
+			return results_vec;
+		}));
+	}
+
+	std::vector<std::vector<Vec3>> orderedRows(image_height);
+	for (auto &future : future_vec) {
+		auto result = future.get();
+		for (auto rows : result) {
+			orderedRows[rows.row] = rows.rayColors;
+		}
+	}
+
 	std::ofstream imageFile("Image.ppm");
 	if (imageFile.is_open()) {
+
 		// Render
 		imageFile << "P3\n";
 		imageFile << image_width << ' ' << image_height << '\n';
 		imageFile << "255\n";
 
-		auto begin = std::chrono::high_resolution_clock::now();
-
-		// Traverse image from left to right, top to bottom.
-		for (int y = image_height - 1; y >= 0; --y) {
-			std::cerr << "\rScanlines remaining: " << y << ' ' << std::flush;
-			for (int x = 0; x < image_width; ++x) {
-				Vec3 pixelColor(0, 0, 0);
-				for (int s = 0; s < samplesPerPixel; ++s) {
-					// Map pixel coordinates from screen space to [0,1] range.
-					double u = double(x) / (image_width - 1);
-					double v = double(y) / (image_height - 1);
-
-					/* Guide for how the ray origin and direction is determined:
-					 (-x,y)                   (x,y)
-					    1-----------------------2
-					    |                       |
-					    |                       |
-					    |           X           |
-					    |         (0,0)         |
-					    |                       |
-					    3-----------------------4
-					 (x,-y)                  (-x,-y)
-
-					    2x = horizontalSize
-					    2y = verticalSize
-					*/
-					Ray ray = camera.getRay(u, v);
-					pixelColor += rayColor(ray, world, maxDepth);
-				}
-				writeColor(imageFile, pixelColor, samplesPerPixel);
+		for (int i = orderedRows.size() - 1; i >= 0; i--) {
+			for (auto color : orderedRows[i]) {
+				// Write the translated [0,255] value of each color component.
+				// imageFile << 255 << ' ' << 255 << ' ' << 255 << '\n';
+				imageFile << static_cast<int>(256 * clamp(color.x(), 0.0, 0.999)) << ' ' << static_cast<int>(256 * clamp(color.y(), 0.0, 0.999))
+				          << ' ' << static_cast<int>(256 * clamp(color.z(), 0.0, 0.999)) << '\n';
 			}
 		}
-
-		auto end = std::chrono::high_resolution_clock::now();
-		auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - begin);
-
-		std::cerr << "\nDone.\n";
-		std::cout << "Time measured: " << duration.count() * 1e-9 << " seconds." << std::endl;
 	}
 	imageFile.close();
 
