@@ -13,7 +13,7 @@ My implementation of the [Ray Tracing In One Weekend](https://raytracing.github.
 
 # Multi-Threading
 For Multi-Threading, I have designed the implementation as follows:
-- Spawn x number of threads (by default will spawn the max number of threads available).
+- Spawn **X** number of threads (by default will spawn the max number of threads available).
 - Using atomic variables, each thread will pick a row to compute.
   - Once a row has been finished, the thread will move onto the next free row.
 - Once all rows have been calculated, they are reordered in an array and then written to a .ppm file.
